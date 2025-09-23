@@ -422,7 +422,7 @@ export const editMessage = async (req, res, next) => {
       console.log('WebSocket broadcast failed:', socketError.message);
     }
 
-    // Prepare response with potential filtering warning
+    // Prepare response with potential filtering warning..
     const response = message.toObject();
     if (filterResult.action === 'filter' || filterResult.action === 'warn') {
       response.contentWarning = {
