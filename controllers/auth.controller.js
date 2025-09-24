@@ -237,10 +237,11 @@ export const googleAuth = async (req, res, next) => {
 
     // Verify the Firebase ID token
     const decodedToken = await admin.auth().verifyIdToken(idToken);
-    const { email: rawEmail, name, picture, uid, email_verified } = decodedToken;
+    const { email: rawEmail, name, picture, email_verified } = decodedToken;
     const email = (rawEmail || '').toLowerCase();
+    const googleUid = decodedToken.uid || decodedToken.user_id || decodedToken.sub;
 
-    console.log('Decoded token:', { email, name, picture, uid }); // Debug log
+    console.log('Decoded token:', { email, name, picture, googleUid }); // Debug log
 
     // Check if user already exists
     let existingUser = await User.findOne({ email });
@@ -258,7 +259,7 @@ export const googleAuth = async (req, res, next) => {
           }
         }
         if (!existingUser.isGoogleUser) existingUser.isGoogleUser = true;
-        if (!existingUser.googleId && uid) existingUser.googleId = uid;
+        if (!existingUser.googleId && googleUid) existingUser.googleId = googleUid;
         await existingUser.save();
       } catch (updateErr) {
         console.warn('Could not update Google/email verification flags for existing user:', updateErr?.message);
@@ -324,7 +325,7 @@ export const googleAuth = async (req, res, next) => {
       phone: "",
       desc: "",
       isGoogleUser: true,
-      googleId: uid,
+      googleId: googleUid,
       emailVerified: email_verified === undefined ? true : !!email_verified,
       emailVerifiedAt: new Date(),
       verificationLevel: 'email_verified',
