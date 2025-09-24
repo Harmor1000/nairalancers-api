@@ -1,11 +1,11 @@
 import nodemailer from "nodemailer";
-import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
+import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-// Configure SES client
-const sesClient = new SESClient({
+// Configure SESv2 client (AWS SDK v3)
+const sesClient = new SESv2Client({
   region: process.env.AWS_REGION || "us-east-1",
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -13,10 +13,21 @@ const sesClient = new SESClient({
   },
 });
 
-// Nodemailer transporter using AWS SES v3
-const transporter = nodemailer.createTransport({
-  SES: { ses: sesClient, aws: { SendRawEmailCommand } }
-});
+// Nodemailer transporter using AWS SES v3 (SESv2 client)
+// Nodemailer v7 expects the SESv2 client and SendEmailCommand from @aws-sdk/client-sesv2
+let transporter; // undefined until first use
+const ensureTransporter = () => {
+  if (transporter !== undefined) return transporter; // could be null if init failed before
+  try {
+    transporter = nodemailer.createTransport({
+      SES: { ses: sesClient, aws: { SendEmailCommand } }
+    });
+  } catch (e) {
+    transporter = null; // mark as unavailable
+    console.error("[emailService] Nodemailer SES transport init failed, using SESv2 fallback:", e?.message || e);
+  }
+  return transporter;
+};
 
 // Verified sender email (must be verified in SES)
 const SENDER_EMAIL = process.env.SES_SENDER_EMAIL || "noreply@nairalancers.com";
@@ -470,21 +481,43 @@ export const sendEmail = async (emailDataOrTo, templateOrData, dataOrUndefined) 
     const results = [];
     
     for (const recipient of to) {
-      const info = await transporter.sendMail({
-        from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
-        to: recipient,
-        subject: emailContent.subject,
-        html: emailContent.html,
-        text: emailContent.text,
-      });
+      const tx = ensureTransporter();
+      if (tx) {
+        // Preferred path via Nodemailer
+        const info = await tx.sendMail({
+          from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+          to: recipient,
+          subject: emailContent.subject,
+          html: emailContent.html,
+          text: emailContent.text,
+        });
 
-      results.push({
-        recipient,
-        success: true,
-        messageId: info?.messageId || info?.response || ""
-      });
+        results.push({
+          recipient,
+          success: true,
+          messageId: info?.messageId || info?.response || ""
+        });
 
-      console.log(`✅ Email sent successfully to ${recipient}:`, info?.messageId || info?.response);
+        console.log(`✅ Email sent successfully to ${recipient}:`, info?.messageId || info?.response);
+      } else {
+        // Fallback: send directly via SESv2 client
+        const params = {
+          FromEmailAddress: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+          Destination: { ToAddresses: [recipient] },
+          Content: {
+            Simple: {
+              Subject: { Data: emailContent.subject, Charset: 'UTF-8' },
+              Body: {
+                Html: { Data: emailContent.html || '', Charset: 'UTF-8' },
+                Text: { Data: emailContent.text || '', Charset: 'UTF-8' },
+              }
+            }
+          }
+        };
+        const resp = await sesClient.send(new SendEmailCommand(params));
+        results.push({ recipient, success: true, messageId: resp?.MessageId || "" });
+        console.log(`✅ Email sent successfully to ${recipient} via SESv2 fallback:`, resp?.MessageId || resp);
+      }
     }
     
     return {
@@ -539,8 +572,11 @@ export const checkSESConfiguration = async () => {
     if (missingVars.length > 0) {
       throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
-    // Verify Nodemailer transporter can initialize
-    await transporter.verify();
+    // Verify Nodemailer transporter if available; otherwise try a dry validation
+    const tx = ensureTransporter();
+    if (tx) {
+      await tx.verify();
+    }
 
     return {
       configured: true,
