@@ -237,7 +237,8 @@ export const googleAuth = async (req, res, next) => {
 
     // Verify the Firebase ID token
     const decodedToken = await admin.auth().verifyIdToken(idToken);
-    const { email, name, picture, uid } = decodedToken;
+    const { email: rawEmail, name, picture, uid, email_verified } = decodedToken;
+    const email = (rawEmail || '').toLowerCase();
 
     console.log('Decoded token:', { email, name, picture, uid }); // Debug log
 
@@ -245,6 +246,24 @@ export const googleAuth = async (req, res, next) => {
     let existingUser = await User.findOne({ email });
 
     if (existingUser) {
+      // User exists, ensure Google flags and email verification are set
+      const now = new Date();
+      try {
+        if (email_verified && !existingUser.emailVerified) {
+          existingUser.emailVerified = true;
+          if (!existingUser.emailVerifiedAt) existingUser.emailVerifiedAt = now;
+          // Promote verification level if needed
+          if (existingUser.verificationLevel === 'unverified') {
+            existingUser.verificationLevel = 'email_verified';
+          }
+        }
+        if (!existingUser.isGoogleUser) existingUser.isGoogleUser = true;
+        if (!existingUser.googleId && uid) existingUser.googleId = uid;
+        await existingUser.save();
+      } catch (updateErr) {
+        console.warn('Could not update Google/email verification flags for existing user:', updateErr?.message);
+      }
+
       // User exists, log them in
       const token = jwt.sign(
         { id: existingUser._id, isSeller: existingUser.isSeller },
@@ -304,12 +323,14 @@ export const googleAuth = async (req, res, next) => {
       state: "", // Provide default values for required fields
       phone: "",
       desc: "",
+      isGoogleUser: true,
+      googleId: uid,
+      emailVerified: email_verified === undefined ? true : !!email_verified,
+      emailVerifiedAt: new Date(),
+      verificationLevel: 'email_verified',
     };
 
-    // Only add googleId and isGoogleUser if they exist in your User model
-    // Check your User model schema and uncomment these if they exist:
-    // userData.googleId = uid;
-    // userData.isGoogleUser = true;
+    // googleId and isGoogleUser are set above
 
     // Generate a random password hash for Google users (they won't use it)
     const randomPassword = Math.random().toString(36).substring(2, 15);
