@@ -3,6 +3,7 @@ import createError from "../utils/createError.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { sendRegistrationVerificationEmail } from "../services/emailService.js";
 
 // Store verification codes temporarily (in production, use Redis or database)
 const registrationVerificationCodes = new Map();
@@ -12,22 +13,7 @@ const generateVerificationCode = () => {
   return crypto.randomInt(100000, 999999).toString();
 };
 
-// Send registration verification email (mock implementation - replace with actual email service)
-const sendRegistrationVerificationEmail = async (email, code, firstname) => {
-  // In production, integrate with email service like SendGrid, Nodemailer, etc.
-  console.log(`Registration Verification Email for ${email}:`);
-  console.log(`Hi ${firstname},`);
-  console.log(`Welcome to Nairalancers! Please verify your email address with this code: ${code}`);
-  console.log(`This code will expire in 10 minutes.`);
-  
-  // Mock email sending - in production, implement actual email sending
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      console.log(`Registration verification email sent to ${email}`);
-      resolve(true);
-    }, 100);
-  });
-};
+// Use SES Nodemailer email service
 
 // Request initial email verification for new registrations
 export const requestRegistrationVerification = async (req, res, next) => {

@@ -411,35 +411,17 @@ const generateResetToken = () => {
   return crypto.randomBytes(32).toString('hex');
 };
 
-// Send password reset email (mock implementation - replace with actual email service)
+// Send password reset email via AWS SES (Nodemailer)
 const sendPasswordResetEmail = async (email, token, firstname) => {
-    // In production, integrate with email service like SendGrid, Nodemailer, etc.
+  try {
     const resetLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
-  
-    console.log(`Password Reset Email for ${email}:`);
-    console.log(`Hi ${firstname},`);
-    console.log(`Click the link below to reset your password:`);
-    console.log(resetLink);
-    console.log(`This link will expire in 1 hour.`);
-    
-    // Mock email sending - in production, implement actual email sending
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        console.log(`Password reset email sent to ${email}`);
-        resolve(true);
-      }, 100);
-    });
-
-    // Send password reset email using AWS SES
-  // try {
-  //   const resetLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
-  //   const result = await sendSESPasswordResetEmail(email, resetLink, firstname);
-  //   console.log(`✅ Password reset email sent to ${email}:`, result.messageId);
-  //   return result;
-  // } catch (error) {
-  //   console.error(`❌ Failed to send password reset email to ${email}:`, error.message);
-  //   throw error;
-  // }
+    const result = await sendSESPasswordResetEmail(email, resetLink, firstname);
+    console.log(`✅ Password reset email sent to ${email}:`, result?.messageId || result);
+    return result;
+  } catch (error) {
+    console.error(`❌ Failed to send password reset email to ${email}:`, error.message);
+    throw error;
+  }
 };
 
 // Request password reset

@@ -2,9 +2,7 @@ import User from "../models/user.model.js";
 import createError from "../utils/createError.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-
-// for production
-// import { sendVerificationEmail as sendSESVerificationEmail, sendRegistrationVerificationEmail as sendSESRegistrationEmail } from "../services/emailService.js";
+import { sendVerificationEmail as sendSESVerificationEmail } from "../services/emailService.js";
 
 // Store verification codes temporarily (in production, use Redis or database)
 const verificationCodes = new Map();
@@ -14,59 +12,7 @@ const generateVerificationCode = () => {
   return crypto.randomInt(100000, 999999).toString();
 };
 
-// Send verification email using AWS SES
-const sendVerificationEmail = async (email, code, type = "change") => {
-    // In production, integrate with email service like SendGrid, Nodemailer, etc.
-    console.log(`Email Verification Code for ${email}: ${code}`);
-    console.log(`Verification Type: ${type}`);
-    
-    // Mock email sending - in production, implement actual email sending
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        console.log(`Verification email sent to ${email} with code: ${code}`);
-        resolve(true);
-      }, 100);
-    });
-
-    // for production
-//   try {
-//     const result = await sendSESVerificationEmail(email, code, type);
-//     console.log(`✅ Verification email sent to ${email}:`, result.messageId);
-//     return result;
-//   } catch (error) {
-//     console.error(`❌ Failed to send verification email to ${email}:`, error.message);
-//     throw error;
-//   }
-};
-// Send initial registration verification email
-const sendRegistrationVerificationEmail = async (email, code, firstname) => {
-
-  // In production, integrate with email service like SendGrid, Nodemailer, etc.
-  console.log(`Registration Verification Email for ${email}:`);
-  console.log(`Hi ${firstname},`);
-  console.log(`Welcome to Nairalancers! Please verify your email address with this code: ${code}`);
-  console.log(`This code will expire in 10 minutes.`);
-  
-  // Mock email sending - in production, implement actual email sending
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      console.log(`Registration verification email sent to ${email}`);
-      resolve(true);
-    }, 100);
-  });
-
-  // for production
-// // Send initial registration verification email using AWS SES
-// const sendRegistrationVerificationEmail = async (email, code, firstname) => {
-//   try {
-//     const result = await sendSESRegistrationEmail(email, code, firstname);
-//     console.log(`✅ Registration verification email sent to ${email}:`, result.messageId);
-//     return result;
-//   } catch (error) {
-//     console.error(`❌ Failed to send registration verification email to ${email}:`, error.message);
-//     throw error;
-//   }
-};
+// Use service-based email sender (AWS SES via Nodemailer)
 
 // Request email verification for email change
 export const requestEmailVerification = async (req, res, next) => {
@@ -112,7 +58,7 @@ export const requestEmailVerification = async (req, res, next) => {
     });
 
     // Send verification email
-    await sendVerificationEmail(newEmail, verificationCode, "change");
+    await sendSESVerificationEmail(newEmail, verificationCode, "change");
 
     res.status(200).json({
       message: "Verification code sent to new email address",
@@ -235,7 +181,7 @@ export const resendVerificationCode = async (req, res, next) => {
     });
 
     // Send verification email
-    await sendVerificationEmail(storedData.newEmail, verificationCode, "resend");
+    await sendSESVerificationEmail(storedData.newEmail, verificationCode, "resend");
 
     res.status(200).json({
       message: "New verification code sent",

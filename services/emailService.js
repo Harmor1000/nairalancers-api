@@ -1,4 +1,5 @@
-import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import nodemailer from "nodemailer";
+import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -10,6 +11,11 @@ const sesClient = new SESClient({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
+});
+
+// Nodemailer transporter using AWS SES v3
+const transporter = nodemailer.createTransport({
+  SES: { ses: sesClient, aws: { SendRawEmailCommand } }
 });
 
 // Verified sender email (must be verified in SES)
@@ -445,44 +451,40 @@ export const sendEmail = async (emailDataOrTo, templateOrData, dataOrUndefined) 
       to = [emailDataOrTo];
       template = templateOrData;
       data = dataOrUndefined;
-      emailContent = emailTemplates[template](data.code || data.resetLink, data.firstname, data.type);
+      // Map known templates to their expected argument signatures
+      if (template === 'emailVerification') {
+        emailContent = emailTemplates.emailVerification(data.code, data.type);
+      } else if (template === 'registrationVerification') {
+        emailContent = emailTemplates.registrationVerification(data.code, data.firstname);
+      } else if (template === 'passwordReset') {
+        emailContent = emailTemplates.passwordReset(data.resetLink, data.firstname);
+      } else if (emailTemplates[template]) {
+        // Best-effort fallback if a template expects a single object param
+        emailContent = emailTemplates[template](data);
+      } else {
+        throw new Error(`Unknown email template: ${template}`);
+      }
     }
     
     // Send to multiple recipients if array, otherwise single recipient
     const results = [];
     
     for (const recipient of to) {
-      const command = new SendEmailCommand({
-        Source: `${SENDER_NAME} <${SENDER_EMAIL}>`,
-        Destination: {
-          ToAddresses: [recipient],
-        },
-        Message: {
-          Subject: {
-            Data: emailContent.subject,
-            Charset: "UTF-8",
-          },
-          Body: {
-            Html: {
-              Data: emailContent.html,
-              Charset: "UTF-8",
-            },
-            Text: {
-              Data: emailContent.text,
-              Charset: "UTF-8",
-            },
-          },
-        },
+      const info = await transporter.sendMail({
+        from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+        to: recipient,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
       });
 
-      const result = await sesClient.send(command);
       results.push({
         recipient,
         success: true,
-        messageId: result.MessageId
+        messageId: info?.messageId || info?.response || ""
       });
-      
-      console.log(`✅ Email sent successfully to ${recipient}:`, result.MessageId);
+
+      console.log(`✅ Email sent successfully to ${recipient}:`, info?.messageId || info?.response);
     }
     
     return {
@@ -537,10 +539,12 @@ export const checkSESConfiguration = async () => {
     if (missingVars.length > 0) {
       throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
-    
+    // Verify Nodemailer transporter can initialize
+    await transporter.verify();
+
     return {
       configured: true,
-      message: 'SES configuration appears to be valid'
+      message: 'SES configuration appears to be valid and transporter is ready'
     };
   } catch (error) {
     return {

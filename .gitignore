@@ -1,0 +1,90 @@
+# Node/Express backend .gitignore for /api repo
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+.nyc_output/
+coverage-final.json
+
+# Build and caches
+dist/
+build/
+.cache/
+.tmp/
+.temp/
+.eslintcache
+.tsbuildinfo
+
+# Environment files (keep examples)
+.env
+.env.*
+!.env.example
+!.env*.example
+
+# Secrets and credentials (never commit)
+serviceAccount*.json
+firebase-adminsdk*.json
+firebase-service-account*.json
+google-credentials*.json
+credentials*.json
+
+# Package manager configs that may contain tokens
+.npmrc
+.pnpmrc
+.yarnrc
+.yarnrc.yml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editors/IDEs
+.vscode/
+.idea/
+*.swp
+
+# Uploads and local storage (generated/runtime data)
+uploads/
+public/uploads/
+storage/
+
+tmp/
+temp/
+
+# Databases and dumps
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+dump.rdb
+
+# TLS/Secrets (never commit private keys)
+*.pem
+*.pfx
+*.crt
+*.key
+*.csr
+
+# PM2/Process managers
+.pm2/
+
+# Test artifacts
+junit.xml
+test-results.xml
